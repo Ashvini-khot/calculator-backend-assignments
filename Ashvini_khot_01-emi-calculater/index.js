@@ -1,17 +1,15 @@
-require('dotenv').config(); // Load .env variables
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const routes = require('./routes'); // Routes for EMI calculations
+const routes = require('./routes'); // Import the updated routes
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Use .env port
+const PORT = process.env.PORT || 5000;
 
-// Serve public files
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Use EMI Calculator-specific routes
-app.use('/', routes);
+app.use('/api', routes); // Use `/api` for structured endpoints
 
 app.listen(PORT, () => {
-    console.log(`EMI Calculator running on http://localhost:${PORT}`);
+    console.log(`Server running at http://localhost:${PORT}`);
 });

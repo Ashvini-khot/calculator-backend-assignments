@@ -1,20 +1,45 @@
 exports.calculateEMI = (req, res) => {
-    const { loanAmount, annualInterestRate, tenureMonths } = req.query;
+    const { principal, rate, tenure, compound } = req.query;
 
-    if (!loanAmount || !annualInterestRate || !tenureMonths) {
-        return res.status(400).json({ error: 'Please provide loanAmount, annualInterestRate, and tenureMonths' });
+    // Convert inputs to numbers
+    const P = parseFloat(principal);
+    const annualRate = parseFloat(rate);
+    const n = parseInt(tenure); // months
+    const c = parseInt(compound); // compound frequency (e.g., 12 for monthly)
+
+    // Validate inputs
+    if (isNaN(P) || isNaN(annualRate) || isNaN(n) || isNaN(c) ||
+        P <= 0 || annualRate <= 0 || n <= 0 || c <= 0) {
+        return res.status(400).json({
+            error: 'Invalid input. Please provide positive numeric values for principal, rate, tenure, and compound frequency.'
+        });
     }
 
-    const P = parseFloat(loanAmount);
-    const R = parseFloat(annualInterestRate) / 12 / 100;
-    const N = parseInt(tenureMonths, 10);
+    // Monthly interest rate
+    const r = annualRate / 12 / 100;
 
-    if (P <= 0 || R <= 0 || N <= 0) {
-        return res.status(400).json({ error: 'All values must be greater than zero' });
-    }
+    // EMI calculation
+    const emi = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
 
-    // EMI Formula Calculation
-    const EMI = (P * R * Math.pow(1 + R, N)) / (Math.pow(1 + R, N) - 1);
+    // Total payable through EMI
+    const totalPayable = emi * n;
 
-    res.json({ EMI: EMI.toFixed(2) }); // Returning EMI rounded to 2 decimal places
+    // Compound Interest Calculation
+    const t = n / 12; // time in years
+    const compoundAmount = P * Math.pow((1 + (annualRate / 100) / c), c * t);
+    const compoundInterest = compoundAmount - P;
+
+    // Payback period (months) = Principal / EMI
+    const paybackPeriodMonths = Math.ceil(P / emi);
+
+    res.status(200).json({
+        principal: P,
+        rate: annualRate,
+        tenure: n,
+        emi: emi.toFixed(2),
+        totalPayable: totalPayable.toFixed(2),
+        compoundInterest: compoundInterest.toFixed(2),
+        compoundAmount: compoundAmount.toFixed(2),
+        paybackPeriodMonths
+    });
 };

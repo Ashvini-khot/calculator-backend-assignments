@@ -2,6 +2,7 @@ class EmiCalculator extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
+        this.chartInstance = null; // for Chart.js
     }
 
     connectedCallback() {
@@ -14,113 +15,140 @@ class EmiCalculator extends HTMLElement {
 
     render() {
         this.shadowRoot.innerHTML = `
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
             <style>
-                @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-
-                .container {
-                    font-family: 'Poppins', sans-serif;
-                    background: white;
-                    padding: 25px;
-                    border-radius: 12px;
-                    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-                    text-align: center;
-                    max-width: 350px;
-                    margin: auto;
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    margin-bottom: 20px;
+                    border-radius: 10px;
                 }
-                h3 {
-                    color: #333;
-                    font-weight: 600;
-                    margin-bottom: 15px;
-                }
-                input {
-                    width: 100%;
-                    padding: 10px;
-                    margin: 8px 0;
-                    border: 1px solid #ddd;
-                    border-radius: 6px;
-                    font-size: 14px;
-                    transition: border 0.3s;
-                }
-                input:focus {
-                    border-color: #007BFF;
-                    outline: none;
-                }
-                button {
-                    width: 100%;
-                    padding: 10px;
-                    background: #007BFF;
-                    border: none;
-                    color: white;
-                    font-size: 16px;
-                    font-weight: 600;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    transition: background 0.3s ease-in-out;
-                }
-                button:hover {
-                    background: #0056b3;
+                .card {
+                    box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+                    border-radius: 1rem;
                 }
                 #result {
-                    margin-top: 15px;
-                    font-weight: bold;
-                    color: #333;
-                    font-size: 18px;
-                }
-                .error {
-                    color: red;
-                    font-size: 14px;
-                    margin-top: 5px;
+                    font-size: 1rem;
                 }
             </style>
+            
+            <div class="container-fluid mt-4">
+                <div class="row justify-content-center m-4">
+                    <div class="col-8 bg-primary rounded">
+                        <h1 class="text-center text-light">Equated Monthly Installment - EMI</h1>
+                    </div>
+                </div>
+                
+                <div class="row align-items-center">
+                   
 
-            <div class="container">
-                <h3>EMI Calculator</h3>
-                <form>
-                    <label>Loan Amount:</label>
-                    <input type="number" id="loanAmount" required min="1" placeholder="Enter loan amount">
+                    <div class="col-md-4">
+                        <div class="card p-4">
+                            <h3 class="text-center text-primary fw-bold mb-4">📊 EMI Calculator</h3>
+                            <form>
+                                <div class="mb-3">
+                                    <label class="form-label">Loan Amount:</label>
+                                    <input type="number" id="principal" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Annual Interest Rate (%):</label>
+                                    <input type="number" id="rate" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Tenure (months):</label>
+                                    <input type="number" id="tenure" class="form-control" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Compounding Frequency (per year):</label>
+                                    <input type="number" id="compound" class="form-control" value="12" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">Calculate EMI</button>
+                            </form>
+                        </div>
+                    </div>
+
                     
-                    <label>Annual Interest Rate (%):</label>
-                    <input type="number" id="interestRate" required min="0.1" step="0.1" placeholder="Enter interest rate">
-                    
-                    <label>Tenure (Months):</label>
-                    <input type="number" id="tenure" required min="1" placeholder="Enter tenure in months">
-                    
-                    <button type="submit">Calculate EMI</button>
-                </form>
-                <div id="result"></div>
-                <div id="error" class="error"></div>
+                    <div class="col-md-4">
+                        <img src="images/accounting-concept-illustration_114360-16970.avif" alt="emi-image" class="img-fluid">
+                    </div>
+
+
+                    <div class="col-4">
+                        <div class="card text-center bg-primary text-light p-4">
+                            <h4>💰 EMI Result</h4>
+                            <div id="result">Your EMI will be shown here.</div>
+                            <canvas id="emiChart" width="50" height="50" class="mt-3"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
 
-    calculateEMI() {
-        const loanAmount = parseFloat(this.shadowRoot.querySelector("#loanAmount").value);
-        const annualInterestRate = parseFloat(this.shadowRoot.querySelector("#interestRate").value);
-        const tenureMonths = parseInt(this.shadowRoot.querySelector("#tenure").value, 10);
-        const resultElement = this.shadowRoot.querySelector("#result");
-        const errorElement = this.shadowRoot.querySelector("#error");
+    async calculateEMI() {
+        const principal = this.shadowRoot.querySelector("#principal").value;
+        const rate = this.shadowRoot.querySelector("#rate").value;
+        const tenure = this.shadowRoot.querySelector("#tenure").value;
+        const compound = this.shadowRoot.querySelector("#compound").value;
 
-        if (isNaN(loanAmount) || isNaN(annualInterestRate) || isNaN(tenureMonths) ||
-            loanAmount <= 0 || annualInterestRate <= 0 || tenureMonths <= 0) {
-            errorElement.textContent = "Please enter valid values.";
-            resultElement.textContent = "";
-            return;
+        const resultDiv = this.shadowRoot.querySelector("#result");
+        resultDiv.textContent = "Calculating...";
+
+        try {
+            const response = await fetch(`http://localhost:5000/api/emi?principal=${principal}&rate=${rate}&tenure=${tenure}&compound=${compound}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                resultDiv.innerHTML = `
+                    <p class="px-3 py-2 border border-light rounded-3 bg-opacity-25 text-start small">
+
+                        <strong>EMI:</strong> ₹${data.emi}<br>
+                        <strong>Total Payable:</strong> ₹${data.totalPayable}<br>
+                        <strong>Compound Interest:</strong> ₹${data.compoundInterest}<br>
+                        <strong>Compound Amount:</strong> ₹${data.compoundAmount}<br>
+                        <strong>Payback Period:</strong> ${data.paybackPeriodMonths} months
+                    </p>
+                `;
+
+                // Render the donut chart
+                const ctx = this.shadowRoot.querySelector("#emiChart").getContext("2d");
+
+                // Destroy previous chart instance if it exists
+                if (this.chartInstance) {
+                    this.chartInstance.destroy();
+                }
+
+                this.chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Principal', 'Compound Interest'],
+                        datasets: [{
+                            data: [parseFloat(principal), data.compoundInterest],
+                            backgroundColor: ['#0d6efd', '#ffc107'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#fff'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } else {
+                resultDiv.textContent = `Error: ${data.error}`;
+            }
+        } catch (error) {
+            resultDiv.textContent = "Server error. Please try again.";
         }
-
-        // EMI Calculation
-        const R = annualInterestRate / 12 / 100;
-        const EMI = (loanAmount * R * Math.pow(1 + R, tenureMonths)) / 
-                    (Math.pow(1 + R, tenureMonths) - 1);
-
-        resultElement.textContent = `Your EMI is ₹${EMI.toFixed(2)}`;
-        errorElement.textContent = "";
     }
 }
 
-if (!customElements.get('emi-calculator')) customElements.define('emi-calculator', EmiCalculator);
-
-if (!window.customElementsList) window.customElementsList = [];
-
-if (!window.customElementsList.find(item => item.component === 'emi-calculator')) {
-    window.customElementsList.push({ component: 'emi-calculator', componentClass: EmiCalculator });
+if (!customElements.get('emi-calculator')) {
+    customElements.define('emi-calculator', EmiCalculator);
 }

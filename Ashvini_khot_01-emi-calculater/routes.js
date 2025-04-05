@@ -1,7 +1,8 @@
 const express = require('express');
-const router = express.Router();
 const { calculateEMI } = require('./controllers/emiController');
 
-router.get('/calculate', calculateEMI);
+const router = express.Router();
+
+router.get('/emi', calculateEMI);
 
 module.exports = router;
